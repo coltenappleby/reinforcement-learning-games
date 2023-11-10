@@ -123,6 +123,15 @@ class QLearner(object):
 
         return self.a
 
+    def save_to_csv(self, filename):
+        # np.save(filename, self.Q)
+        np.savetxt(filename, self.Q, delimiter=",")
+
+    def save_to_npy(self, filename):
+        np.save(filename, self.Q)
+
+    def load_existing_model(self, filename):
+        self.Q = np.load(filename)
 
 if __name__ == "__main__":
     print("Remember Q from Star Trek? Well, this isn't him")

@@ -1,6 +1,5 @@
 import random
 
-
 class SoSorry:
 
     def __init__(self,
@@ -8,6 +7,7 @@ class SoSorry:
         player_name = 'player1',
         player_position = 0,
         verbose=False,
+        learner = None
     ):
         self.number_of_players = players
         self.player_name = player_name
@@ -18,6 +18,12 @@ class SoSorry:
         self.deck = [i for i in range(1, 14) for _ in range(4)]
         self.verbose = verbose
         self.traded = False
+        self.learner = learner
+        self.first_turn = True
+
+        self.hand_trades = 0
+
+
 
     def game(self):
         print("Welcome to So Sorry!")
@@ -39,6 +45,7 @@ class SoSorry:
         while len([x for x in self.player_cards if x > -1]) > 1:
 
             self.deal_hand()
+            print("Everyone has been dealt a card:", self.player_cards)
 
             k = self.curr_dealer + 1
             while True:
@@ -48,12 +55,15 @@ class SoSorry:
                 elif self.player_cards[k] == -1:
                     k+=1
                     continue
-                elif k == self.curr_player:
-                    self.players_turn()
-                    if self.curr_player == self.curr_dealer:
-                        break
-                    k += 1
-                    continue
+                # elif k == self.curr_player:
+                #     if self.learner:
+                #         self.model_turn()
+                #     else:
+                #         self.players_turn()
+                #     if self.curr_player == self.curr_dealer:
+                #         break
+                #     k += 1
+                #     continue
                 elif k == self.curr_dealer:
                     self.should_I_stay_or_should_I_go(k)
                     break
@@ -63,11 +73,16 @@ class SoSorry:
             print("Everyone show their cards:", self.player_cards)
 
             self.decide_losers()
+            # One Tie, All Tie
+            if len([x for x in self.player_cards if x > -1]) == 0:
+                self.player_cards = [0 for _ in range(self.number_of_players)]
+
             self.update_dealer()
             if self.verbose: print("Dealer is now", self.players[self.curr_dealer])
 
             if len(self.deck) < len([x for x in self.player_cards if x > -1]):
                 self.shuffle()
+            self.hand_trades = 0
             print("------------------------------ NEXT ROUND ------------------------------")
 
         print(f"Winner is {self.players[self.player_cards.index(max(self.player_cards))]}")
@@ -78,8 +93,10 @@ class SoSorry:
         for loser in losers:
             if self.verbose: print(self.players[loser], f"had the lowest card [{lowest_card}] and is out of the game")
             self.player_cards[loser] = -1
+        return losers
 
     def update_dealer(self):
+        # print(f"Updating dealer -- {self.curr_dealer} - players left: {len([x for x in self.player_cards if x > -1])}")
         self.curr_dealer += 1
         if self.curr_dealer == self.number_of_players:
             self.curr_dealer = 0
@@ -87,11 +104,11 @@ class SoSorry:
             self.update_dealer()
 
     def should_I_stay_or_should_I_go(self, current_player):
-        if self.traded == True and self.player_cards[current_player] > self.player_cards[self.get_card_traded_index(current_player)]:
+        if self.traded == True and self.player_cards[current_player] > self.player_cards[self. get_card_traded_index(current_player)]:
             if self.verbose: print(f"{self.players[current_player]} is staying")
             self.traded = False
         # if random.random() > 0.5:
-        elif self.player_cards[current_player] < 7:
+        if self.player_cards[current_player] < 7:
             self.trade(current_player)
         else:
             if self.verbose: print(f"{self.players[current_player]} is staying")
@@ -111,8 +128,16 @@ class SoSorry:
         else:
             player_to_trade_with = self.player_to_trade_with(curr_index+1)
             if self.verbose: print(f"{self.players[curr_index]} is trading with {self.players[player_to_trade_with]}")
-            self.player_cards[curr_index], self.player_cards[player_to_trade_with] = self.player_cards[player_to_trade_with], self.player_cards[curr_index]
-        self.traded = True
+            # print(self.player_cards)
+            if self.player_cards[player_to_trade_with] == 13:
+                if self.verbose: print(f"Next Player has a King! So Sorry")
+                self.Traded = False
+            else:
+                self.player_cards[curr_index], self.player_cards[player_to_trade_with] = self.player_cards[player_to_trade_with], self.player_cards[curr_index]
+                self.hand_trades += 1
+                self.traded = True
+            # print(self.player_cards)
+
 
     def players_turn(self):
         print()
@@ -141,11 +166,12 @@ class SoSorry:
         print()
 
     def get_card_traded_index(self, index):
-        if self.player_cards[index-1] == -1:
+        if index == 0:
+            return self.get_card_traded_index(self.number_of_players-1)
+        if self.player_cards[index-1] == -1 or self.player_cards[index-1] == 13:
             return self.get_card_traded_index(index-1)
         else:
             return index-1
-
 
     def deal_hand(self):
         if self.verbose: print(self.players[self.curr_dealer], "is dealing...")
@@ -170,7 +196,7 @@ class SoSorry:
 
     def shuffle(self):
         if self.verbose: print("Shuffling deck...")
-        new_deck = [i for i in range(1, 13) for _ in range(4)]
+        new_deck = [i for i in range(1, 14) for _ in range(4)]
         self.deck = random.sample(new_deck, len(new_deck))
 
     def print_card(self, player_index):
@@ -186,6 +212,3 @@ class SoSorry:
         if card_index == 13:
             return "King"
 
-if __name__ == "__main__":
-    game = SoSorry(4, verbose=True)
-    game.game()
