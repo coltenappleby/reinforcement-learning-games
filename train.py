@@ -1,16 +1,29 @@
 import numpy as np
+import pandas as pd
+
 import QLearner as ql
 import SoSorry as ss
+
+import time
 
 def discretize(curr_card, curr_traded_card, trades_before, players_after):
     """
     convert the situation to a single integer
     """
-    return curr_card * 1000 + curr_traded_card * 100 + trades_before * 10 + players_after * 1
+    # return curr_card * 1000 + curr_traded_card * 100 + trades_before * 10 + players_after * 1
+    return curr_card * 1500 + curr_traded_card * 100 + trades_before * 10 + players_after * 1
 
-def train(verbose = False, runs = 1000):
+def train(
+        runs = 1,
+        games=1,
+        load=True,
+        save=True,
+        model_name = None,
+        verbose = False,
+        dyna=0
+):
     print("training...")
-    players = 9
+    players = 5
     cards = 13
     traded_cards = cards + 1
     pot_trades_before = players-1
@@ -18,31 +31,36 @@ def train(verbose = False, runs = 1000):
     stopped_trades_before = players%2
     num_states = discretize(cards, traded_cards, pot_trades_before, pot_players_after)
 
-    game_outcome = np.zeros(runs)
-    wins = 0
+    model = ql.QLearner(num_states=num_states, num_actions=2, dyna=dyna, verbose=verbose, rar=0.8, radr=0.999999999999)
+    if load:
+        model.load_existing_model(model_name)
 
-    model = ql.QLearner(num_states=num_states, num_actions=2, dyna=200, verbose=False)
-    model.load_existing_model('model.npy')
-
+    game_outcome = np.zeros(shape=(runs, games))
+    wins: int
     reward = 0
 
-    for i in range(runs):
-        # print(f"Run {i+1} of {runs}")
-        game = ss.SoSorry(players, learner=model, verbose=False)
-        points, reward = play_game(game, reward, False)
-        game_outcome[i] = points
-        wins += points
+    print("------------------ Starting Training ------------------")
+    start = time.time()
 
+    for j in range(runs):
+        wins = 0
+        for i in range(games):
+            game = ss.SoSorry(players, learner=None, verbose=verbose)
+            points, reward = play_game(game, reward, model, verbose)
+            wins += points
+            game_outcome[j, i] = points
+        print(f"Run {j} Wins: {wins}")
 
-    # save the outcomes to disk
-    np.savetxt("game_outcomes.csv", game_outcome, delimiter=",")
-    print("Wins:", wins)
-    print("Saving model to disk...")
-    model.save_to_npy('model')
+    end = time.time()
+    print(runs, "Took", end - start, "seconds")
 
-    return wins
+    if save:
+        # save the outcomes to disk
+        np.savetxt("models/game_outcomes_first_50.csv", game_outcome, delimiter=",")
+        print("Saving model to disk...")
+        model.save_to_npy(model_name)
 
-def play_game(game: ss, reward: int, verbose = False):
+def play_game(game: ss, reward: int, learner, verbose = False):
 
     if verbose:
         print("Welcome to So Sorry!")
@@ -78,8 +96,10 @@ def play_game(game: ss, reward: int, verbose = False):
                 continue
             elif k == game.curr_player:
                 # TRAIN MODEL HERE
-                if verbose: print("The model is choosing an action...")
-                action = model_turn(game, reward)
+                if verbose:
+                    print("The model is choosing an action... Current Card is", game.player_cards[game.curr_player])
+
+                action = model_turn(game, reward, learner)
                 if action == 0: game.trade(game.curr_player)
                 if game.curr_player == game.curr_dealer:
                     break
@@ -95,6 +115,7 @@ def play_game(game: ss, reward: int, verbose = False):
 
         losers = game.decide_losers()
         # One Tie, All Tie
+        if verbose: print("One Tie, All Tie!")
         if len([x for x in game.player_cards if x > -1]) == 0:
             game.player_cards = [0 for _ in range(game.number_of_players)]
 
@@ -102,19 +123,24 @@ def play_game(game: ss, reward: int, verbose = False):
         if game.curr_player in losers:
             reward = -100
         else:
-            reward = 1
+            players_left = len([x for x in game.player_cards if x > -1])
+            if players_left == 1:
+                reward = game.number_of_players * 100
+            else:
+                reward = 25
         if verbose: print("Dealer is now", game.players[game.curr_dealer])
 
         if len(game.deck) < len([x for x in game.player_cards if x > -1])+2:
             game.shuffle()
         game.hand_trades = 0
-        if verbose: print("------------------------------ NEXT ROUND ------------------------------")
+        if verbose: print("------------ NEXT ROUND ----------")
 
     if verbose: print(f"Winner is {game.players[game.player_cards.index(max(game.player_cards))]}")
     return 1 if game.player_cards.index(max(game.player_cards)) == game.curr_player else 0, reward
 
 
-def model_turn(game: ss, r: int): # -> int:
+
+def model_turn(game: ss, r: int, learner: ql): # -> int:
 
     curr_card = game.player_cards[game.curr_player]
     if game.traded == True:
@@ -143,19 +169,35 @@ def model_turn(game: ss, r: int): # -> int:
         print("Something Wrong")
     if r == 0:
         game.first_turn = False
-        return game.learner.querysetstate(state) # Returns an Action
+        return learner.querysetstate(state) # Returns an Action
     else:
-        return game.learner.query(state, r) # Returns an Action
+        return learner.query(state, r) # Returns an Action
+
+def reverse_discretize(value):
+    curr_card = value // 1000
+    curr_traded_card = (value % 1000) // 100
+    trades_before = (value % 100) // 10
+    players_after = value % 10
+    return curr_card, curr_traded_card, trades_before, players_after
+
+def understand_data(np_file, save_file):
+    data = np.load(np_file)
+    # Get the index of the array
+    index = np.arange(len(data))
+    # Create the dataframe
+    df = pd.DataFrame(data, index=index)
+    # Save the dataframe to CSV
+    df['curr_card'] = index // 1500
+    df['curr_traded_card'] = (index % 1500) // 100
+    df['trades_before'] = (index % 100) // 10
+    df['players_after'] = index % 10
+    df.rename(columns={0:'Trade', 1:'Stay'}, inplace=True)
+
+    df.to_csv(save_file)
 
 if __name__ == "__main__":
     # play_game(game)
 
-    wins = []
-    for i in range(100):
-        wins.append(train(False, 1000))
+    train(7000, 1000, True, True, './models/model3.npy', False, dyna=0)
 
-    print(wins)
-
-    # game = SoSorry(13, verbose=True)
-    # for i in range(1,100):
-    #     game.game()
+    understand_data('./models/model3.npy', './models/model3.csv')
