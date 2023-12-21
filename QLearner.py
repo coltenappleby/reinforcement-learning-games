@@ -33,7 +33,7 @@ class QLearner(object):
         alpha=0.2,
         gamma=0.9,
         rar=0.5,
-        radr=0.99,
+        radr=0.999,
         dyna=0,
         verbose=False,
     ):
@@ -55,6 +55,7 @@ class QLearner(object):
         self.R = np.zeros(shape=(num_states, num_actions))
         self.moves = []
 
+
     def author(self):
         return "cappleby3"
 
@@ -68,14 +69,14 @@ class QLearner(object):
         :rtype: int  		  	   		  		 		  		  		    	 		 		   		 		  
         """
         self.s = s
-        self.a = np.random.randint(0, self.num_actions - 1)
+        self.a = np.random.randint(0, self.num_actions)
         # self.a = self.get_action(s)
         if self.verbose: print(f"s = {s}, a = {self.a}")
         return self.a
 
     def get_action(self, state):
         if np.random.rand() <= self.rar:
-            return np.random.randint(0, self.num_actions - 1)
+            return np.random.randint(0, self.num_actions)
         else:
             return np.argmax(self.Q[state])
 

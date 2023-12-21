@@ -11,7 +11,8 @@ def discretize(curr_card, curr_traded_card, trades_before, players_after):
     convert the situation to a single integer
     """
     # return curr_card * 1000 + curr_traded_card * 100 + trades_before * 10 + players_after * 1
-    return curr_card * 1500 + curr_traded_card * 100 + trades_before * 10 + players_after * 1
+    # return curr_card * 1500 + curr_traded_card * 100 + trades_before * 10 + players_after * 1
+    return curr_card * 15 + curr_traded_card
 
 def train(
         runs = 1,
@@ -198,6 +199,6 @@ def understand_data(np_file, save_file):
 if __name__ == "__main__":
     # play_game(game)
 
-    train(7000, 1000, True, True, './models/model3.npy', False, dyna=0)
+    train(1000, 1000, False, False, './models/model3.npy', False, dyna=0)
 
     understand_data('./models/model3.npy', './models/model3.csv')
